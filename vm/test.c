@@ -178,7 +178,7 @@ load:
         }
         ret = fn(mem, mem_len);
     } else {
-        if (ubpf_exec(vm, mem, mem_len, &ret) < 0)
+        if (ubpf_exec(vm, mem, mem_len, mem, &ret) < 0)
             ret = UINT64_MAX;
     }
 

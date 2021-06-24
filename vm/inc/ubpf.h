@@ -115,7 +115,7 @@ void ubpf_unload_code(struct ubpf_vm *vm);
 int ubpf_load_elf(struct ubpf_vm *vm, const void *elf, size_t elf_len, char **errmsg);
 #endif
 
-int ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len, uint64_t* bpf_return_value);
+int ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len, void *omem, uint64_t* bpf_return_value);
 
 ubpf_jit_fn ubpf_compile(struct ubpf_vm *vm, char **errmsg);
 

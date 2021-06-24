@@ -182,8 +182,8 @@ u32(uint64_t x)
     return x;
 }
 
-int 
-ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len, uint64_t* bpf_return_value)
+int
+ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len, void *omem, uint64_t* bpf_return_value)
 {
     uint16_t pc = 0;
     const struct ebpf_inst *insts = vm->insts;
@@ -206,7 +206,8 @@ ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len, uint64_t* bpf_ret
 #endif
 
     reg[1] = (uintptr_t)mem;
-    reg[2] = (uint64_t)mem_len;
+    reg[2] = (uintptr_t)omem; // NOTE: mem_len was on reg[2], now moved to reg[3]
+    reg[3] = (uint64_t)mem_len;
     reg[10] = (uintptr_t)stack + sizeof(stack);
 
     while (1) {
