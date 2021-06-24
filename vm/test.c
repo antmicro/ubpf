@@ -308,6 +308,11 @@ unwind(uint64_t i)
     return i;
 }
 
+static void print(char *msg)
+{
+    printf("%s\n", msg);
+}
+
 static void
 register_functions(struct ubpf_vm *vm)
 {
@@ -316,6 +321,7 @@ register_functions(struct ubpf_vm *vm)
     ubpf_register(vm, 2, "trash_registers", trash_registers);
     ubpf_register(vm, 3, "sqrti", sqrti);
     ubpf_register(vm, 4, "strcmp_ext", strcmp);
-    ubpf_register(vm, 5, "unwind", unwind);
-    ubpf_set_unwind_function_index(vm, 5);
+    ubpf_register(vm, 5, "print", print);
+    ubpf_register(vm, 6, "unwind", unwind);
+    ubpf_set_unwind_function_index(vm, 6);
 }
