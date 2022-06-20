@@ -22,7 +22,9 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <sys/mman.h>
+#include <endian.h>
 #include "ubpf_int.h"
+#include <unistd.h>
 
 #define MAX_EXT_FUNCS 64
 
@@ -71,6 +73,13 @@ ubpf_create(void)
     vm->bounds_check_enabled = true;
     vm->error_printf = fprintf;
 
+#if __x86_64__
+    vm->translate = ubpf_translate_x86_64;
+#elif __aarch64__
+    vm->translate = ubpf_translate_arm64;
+#else
+    vm->translate = ubpf_translate_null;
+#endif
     vm->unwind_stack_extension_index = -1;
     return vm;
 }
@@ -178,13 +187,23 @@ ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len, uint64_t* bpf_ret
 {
     uint16_t pc = 0;
     const struct ebpf_inst *insts = vm->insts;
-    uint64_t reg[16];
+    uint64_t *reg;
+    uint64_t _reg[16];
     uint64_t stack[(UBPF_STACK_SIZE+7)/8];
 
     if (!insts) {
         /* Code must be loaded before we can execute */
         return -1;
     }
+
+#ifdef DEBUG
+    if (vm->regs)
+        reg = vm->regs;
+    else
+        reg = _reg;
+#else
+    reg = _reg;
+#endif
 
     reg[1] = (uintptr_t)mem;
     reg[2] = (uint64_t)mem_len;
@@ -814,3 +833,34 @@ ubpf_error(const char *fmt, ...)
     va_end(ap);
     return msg;
 }
+
+#ifdef DEBUG
+void
+ubpf_set_registers(struct ubpf_vm *vm, uint64_t *regs)
+{
+    vm->regs = regs;
+}
+
+uint64_t *
+ubpf_get_registers(const struct ubpf_vm *vm)
+{
+    return vm->regs;
+}
+#else
+void
+ubpf_set_registers(struct ubpf_vm *vm, uint64_t *regs)
+{
+    (void) vm;
+    (void) regs;
+    fprintf(stderr, "uBPF warning: registers are not exposed in release mode. Please recompile in debug mode\n");
+}
+
+uint64_t *
+ubpf_get_registers(const struct ubpf_vm *vm)
+{
+    (void) vm;
+    fprintf(stderr, "uBPF warning: registers are not exposed in release mode. Please recompile in debug mode\n");
+    return NULL;
+}
+
+#endif

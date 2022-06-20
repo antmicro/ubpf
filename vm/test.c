@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#include <ubpf_config.h>
+
 #define _GNU_SOURCE
 #include <inttypes.h>
 #include <stdlib.h>
@@ -24,9 +26,12 @@
 #include <string.h>
 #include <getopt.h>
 #include <errno.h>
-#include <elf.h>
 #include <math.h>
 #include "ubpf.h"
+
+#if defined(UBPF_HAS_ELF_H)
+#include <elf.h>
+#endif
 
 void ubpf_set_register_offset(int x);
 static void *readfile(const char *path, size_t maxlen, size_t *len);
@@ -53,7 +58,7 @@ int main(int argc, char **argv)
         { .name = "register-offset", .val = 'r', .has_arg=1 },
         { .name = "unload", .val = 'U' }, /* for unit test only */
         { .name = "reload", .val = 'R' }, /* for unit test only */
-        { }
+        { 0 }
     };
 
     const char *mem_filename = NULL;
@@ -126,16 +131,22 @@ int main(int argc, char **argv)
      * The ELF magic corresponds to an RSH instruction with an offset,
      * which is invalid.
      */
+#if defined(UBPF_HAS_ELF_H)
     bool elf = code_len >= SELFMAG && !memcmp(code, ELFMAG, SELFMAG);
+#endif
 
     char *errmsg;
     int rv;
 load:
+#if defined(UBPF_HAS_ELF_H)    
     if (elf) {
 	rv = ubpf_load_elf(vm, code, code_len, &errmsg);
     } else {
+#endif
 	rv = ubpf_load(vm, code, code_len, &errmsg);
+#if defined(UBPF_HAS_ELF_H)  
     }
+#endif
     if (unload) {
         ubpf_unload_code(vm);
         unload = false;
@@ -162,6 +173,7 @@ load:
         if (fn == NULL) {
             fprintf(stderr, "Failed to compile: %s\n", errmsg);
             free(errmsg);
+            free(mem);
             return 1;
         }
         ret = fn(mem, mem_len);
@@ -173,6 +185,7 @@ load:
     printf("0x%"PRIx64"\n", ret);
 
     ubpf_destroy(vm);
+    free(mem);
 
     return 0;
 }
@@ -191,7 +204,7 @@ static void *readfile(const char *path, size_t maxlen, size_t *len)
         return NULL;
     }
 
-    void *data = calloc(maxlen, 1);
+    char *data = calloc(maxlen, 1);
     size_t offset = 0;
     size_t rv;
     while ((rv = fread(data+offset, 1, maxlen-offset, file)) > 0) {
@@ -217,8 +230,19 @@ static void *readfile(const char *path, size_t maxlen, size_t *len)
     if (len) {
         *len = offset;
     }
-    return data;
+    return (void *) data;
 }
+
+#ifndef __GLIBC__
+void *
+memfrob(void *s, size_t n)
+{
+    for (int i = 0; i < n; i++) {
+        ((char *)s)[i] ^= 42;
+    }
+    return s;
+}
+#endif
 
 static uint64_t
 gather_bytes(uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t e)
@@ -234,6 +258,7 @@ static void
 trash_registers(void)
 {
     /* Overwrite all caller-save registers */
+#if __x86_64__
     asm(
         "mov $0xf0, %rax;"
         "mov $0xf1, %rcx;"
@@ -245,6 +270,30 @@ trash_registers(void)
         "mov $0xf7, %r10;"
         "mov $0xf8, %r11;"
     );
+#elif __aarch64__
+    asm(
+        "mov w0, #0xf0;"
+        "mov w1, #0xf1;"
+        "mov w2, #0xf2;"
+        "mov w3, #0xf3;"
+        "mov w4, #0xf4;"
+        "mov w5, #0xf5;"
+        "mov w6, #0xf6;"
+        "mov w7, #0xf7;"
+        "mov w8, #0xf8;"
+        "mov w9, #0xf9;"
+        "mov w10, #0xfa;"
+        "mov w11, #0xfb;"
+        "mov w12, #0xfc;"
+        "mov w13, #0xfd;"
+        "mov w14, #0xfe;"
+        "mov w15, #0xff;"
+        ::: "w0", "w1", "w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9", "w10", "w11", "w12", "w13", "w14", "w15"
+    );
+#else
+    fprintf(stderr, "trash_registers not implemented for this architecture.\n");
+    exit(1);
+#endif
 }
 
 static uint32_t
